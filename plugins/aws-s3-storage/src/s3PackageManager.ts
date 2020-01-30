@@ -336,13 +336,8 @@ export default class S3PackageManager implements ILocalPackageManager {
     return uploadStream;
   }
 
-  public readTarball(name: string): ReadTarball {
-    this.logger.debug(
-      { name, packageName: this.packageName },
-      's3: [S3PackageManager readTarball init] name @{name}/@{packageName}'
-    );
+  private _readTarballFromS3(name: string): ReadTarball {
     const readTarballStream = new ReadTarball({});
-
     const request = this.s3.getObject({
       Bucket: this.config.bucket,
       Key: `${this.packagePath}/${name}`,
@@ -359,12 +354,12 @@ export default class S3PackageManager implements ILocalPackageManager {
         // than one error or it'll fail
         // https://github.com/verdaccio/verdaccio/blob/c1bc261/src/lib/storage.js#L178
         this.logger.debug(
-          { name, packageName: this.packageName },
+          {name, packageName: this.packageName},
           's3: [S3PackageManager readTarball httpHeaders] name @{name}/@{packageName}'
         );
-        this.logger.trace({ headers }, 's3: [S3PackageManager readTarball httpHeaders event] headers @headers');
+        this.logger.trace({headers}, 's3: [S3PackageManager readTarball httpHeaders event] headers @headers');
         this.logger.trace(
-          { statusCode },
+          {statusCode},
           's3: [S3PackageManager readTarball httpHeaders event] statusCode @statusCode'
         );
         if (statusCode !== HTTP_STATUS.NOT_FOUND) {
@@ -394,7 +389,7 @@ export default class S3PackageManager implements ILocalPackageManager {
       const error: HttpError = convertS3Error(err as AWSError);
 
       readTarballStream.emit('error', error);
-      this.logger.error({ error }, 's3: [S3PackageManager readTarball readTarballStream event] error @{error}');
+      this.logger.error({error}, 's3: [S3PackageManager readTarball readTarballStream event] error @{error}');
     });
 
     this.logger.trace('s3: [S3PackageManager readTarball readTarballStream event] pipe');
@@ -408,5 +403,34 @@ export default class S3PackageManager implements ILocalPackageManager {
     };
 
     return readTarballStream;
+  }
+
+  private _moveRequestToS3(name: string): ReadTarball {
+    const readTarballStream = new ReadTarball({});
+    setImmediate(() => {
+      const url = this.s3.getSignedUrl('getObject', {
+        Bucket: this.config.bucket,
+        Key: `${this.packagePath}/${name}`
+      });
+        readTarballStream.emit('open');
+        this.logger.debug('s3: [S3PackageManager readTarball readTarballStream event] emit open');
+        readTarballStream.emit('move', url);
+        this.logger.debug('s3: [S3PackageManager readTarball readTarballStream event] emit move');
+      });
+    return readTarballStream;
+  }
+
+  public readTarball(name: string): ReadTarball {
+    this.logger.debug(
+      {name, packageName: this.packageName},
+      's3: [S3PackageManager readTarball init] name @{name}/@{packageName}'
+    );
+    return this._moveRequestToS3(name);
+    // TODO: Add settings to configuration file
+    // if (this.config.useDownloadProcessor) {
+    //   return this._readTarballFromS3(name);
+    // } else {
+    //   return this._moveRequestToS3(name);
+    // }
   }
 }
