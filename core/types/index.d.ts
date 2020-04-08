@@ -139,6 +139,7 @@ declare module '@verdaccio/types' {
     time?: GenericBody;
     readme?: string;
     users?: PackageUsers;
+    maintainers?: Author[];
     _distfiles: DistFiles;
     _attachments: AttachMents;
     _uplinks: UpLinks;
